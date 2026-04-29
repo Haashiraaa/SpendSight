@@ -11,6 +11,49 @@ from haashi_pkg.data_engine import (
     DataLoader, DataAnalyzer, DataFrame, Series
 )
 
+MASKING_MAP = {
+    # Income
+    "Transfer from":  "Income",
+    "Bank Deposit":   "Income",
+    "Cash Deposit":   "Income",
+    "Add Money":      "Income",
+    "Reversal":       "Income",
+
+    # Transfers Out
+    "Transfer to":    "Transfers",
+
+    # Savings & Investments
+    "SafeBox":        "Savings",
+    "OWealth":        "Savings",
+    "Targets":        "Savings",
+    "Spend & Save":   "Savings",
+    "Fixed":          "Savings",
+
+    # Phone & Data
+    "Airtime":        "Phone & Data",
+    "Mobile Data":    "Phone & Data",
+    "USSD Charge":    "Phone & Data",
+    "SMS Subscription": "Phone & Data",
+
+    # Utilities
+    "Electricity":    "Utilities",
+    "TV":             "Utilities",
+
+    # Shopping & Bills
+    "Online Payment":     "Shopping & Bills",
+    "OPay Card Payment":  "Shopping & Bills",
+    "Gift Card":          "Shopping & Bills",
+
+    # Cash
+    "Cash Withdraw":  "Cash Withdrawal",
+
+    # Bank Charges
+    "Stamp Duty":     "Bank Charges",
+
+    # Betting
+    "Betting":        "Betting",
+}
+
 
 class OpayParser(BaseParser):
 
@@ -27,17 +70,12 @@ class OpayParser(BaseParser):
         self.analyzer = DataAnalyzer(logger=self.logger)
 
         # Configuration: Patterns to mask with generic descriptions
-        self.MASKING_MAP = {
-            "Transfer": "Transfers",
-            "Mobile|Airtime|SMS|USSD": "Phone & Data",
-            "Electricity": "Electricity bill",
-            "Card|Merchant": "Purchases",
-        }
+        self.MASKING_MAP = MASKING_MAP
 
     def _get_debit_transactions(
         self,
         df: DataFrame,
-        save_path: str = "data/cleaned_data/debit_transactions/parquet"
+        save_path: str = "data/cleaned_data/debit_transactions.parquet"
     ) -> None:
         # Filter to debit transactions only
         self.logger.debug("Filtering to debit transactions only")
@@ -114,6 +152,74 @@ class OpayParser(BaseParser):
         self._save_data(debit_df, save_path, self.logger, self.handler)
 
         self.analyzer.inspect_dataframe(debit_df)
+        print(debit_df["description"].unique())
+
+    def _get_credit_transactions(
+        self,
+        df: DataFrame,
+        save_path: str = "data/cleaned_data/credit_transactions.parquet"
+    ) -> None:
+        # Filter to debit transactions only
+        self.logger.debug("Filtering to credit transactions only")
+        initial_count = len(df)
+
+        credit_df = cast(
+            DataFrame,
+            df[df["debit(₦)"] == "--"]
+        )
+        self.logger.debug(
+            f"Kept {len(credit_df)}/{initial_count} credit transactions")
+
+        # Drop unnecessary columns
+        self.logger.debug("Removing unnecessary columns")
+        columns_to_drop = [
+            "value_date",
+            "channel",
+            "debit(₦)",
+            "balance_after(₦)",
+            "transaction_reference",
+        ]
+        credit_df = credit_df.drop(columns=columns_to_drop)
+
+        # Rename trans._date column
+        credit_df = credit_df.rename(columns={"trans._date": "trans_date"})
+
+        # Mask sensitive/specific descriptions with generic labels
+        self.logger.debug("Masking transaction descriptions")
+        for pattern, generic_desc in self.MASKING_MAP.items():
+            self._mask_description(
+                credit_df, "description", pattern, generic_desc)
+
+        # Convert data types
+        self.logger.debug("Converting data types")
+        credit_df["trans_date"] = self.analyzer.convert_datetime(
+            cast(Series, credit_df["trans_date"]))
+        credit_df["description"] = credit_df["description"].astype(
+            "category")
+        credit_df["debit(₦)"] = self.analyzer.convert_numeric(
+            cast(Series, credit_df["credit(₦)"]))
+
+        # Add derived column: transaction month
+        self.logger.debug("Adding transaction month column")
+        credit_df["trans_month"] = credit_df["trans_date"].dt.to_period("M")
+
+        # Final validation
+        self.logger.debug("Validating cleaned data")
+        self.analyzer.validate_columns_exist(
+            credit_df,
+            ["trans_date", "description", "credit(₦)", "trans_month"]
+        )
+
+        self.logger.info(
+            f"Cleaning completed: {len(credit_df)} transactions retained")
+        self.logger.info(
+            f"Date range: {credit_df['trans_date'].min()} to {credit_df['trans_date'].max()}")
+        self.logger.info(f"Categories: {credit_df['description'].nunique()}")
+
+        self._save_data(credit_df, save_path, self.logger, self.handler)
+
+        self.analyzer.inspect_dataframe(credit_df)
+        print(credit_df["description"].unique())
 
     def parse_data(
         self,
@@ -123,6 +229,8 @@ class OpayParser(BaseParser):
 
         self.logger.info(f"Loading data from {file_path}")
         self.logger.debug(f"Skipping {rows_to_skip} header rows")
+
+        file_path = str(self.handler.get_script_dir() / file_path)
 
         # Load data
         loader = DataLoader(file_path, logger=self.logger)
@@ -137,3 +245,5 @@ class OpayParser(BaseParser):
         bank_st_df.columns = bank_st_df.columns.str.replace(" ", "_")
 
         self._get_debit_transactions(bank_st_df)
+
+        self._get_credit_transactions(bank_st_df)
