@@ -151,8 +151,8 @@ class OpayParser(BaseParser):
 
         self._save_data(debit_df, save_path, self.logger, self.handler)
 
-        self.analyzer.inspect_dataframe(debit_df)
-        print(debit_df["description"].unique())
+        # self.analyzer.inspect_dataframe(debit_df)
+        # print(debit_df["description"].unique())
 
     def _get_credit_transactions(
         self,
@@ -218,8 +218,8 @@ class OpayParser(BaseParser):
 
         self._save_data(credit_df, save_path, self.logger, self.handler)
 
-        self.analyzer.inspect_dataframe(credit_df)
-        print(credit_df["description"].unique())
+        # self.analyzer.inspect_dataframe(credit_df)
+        # print(credit_df["description"].unique())
 
     def parse_data(
         self,
