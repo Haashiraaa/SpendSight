@@ -4,9 +4,9 @@
 
 
 import logging
-from typing import Optional, cast
+from typing import Optional, Tuple, cast
 from src.parsers.base import BaseParser
-from haashi_pkg.utility import Logger, FileHandler
+from haashi_pkg.utility import Logger, FileHandler, ScreenUtil as su
 from haashi_pkg.data_engine import (
     DataLoader, DataAnalyzer, DataFrame, Series
 )
@@ -76,9 +76,10 @@ class OpayParser(BaseParser):
         self,
         df: DataFrame,
         save_path: str = "data/cleaned_data/debit_transactions.parquet"
-    ) -> None:
+    ) -> DataFrame:
         # Filter to debit transactions only
-        self.logger.debug("Filtering to debit transactions only")
+        su.space()
+        self.logger.info("Filtering to debit transactions only")
         initial_count = len(df)
 
         debit_df = cast(
@@ -149,18 +150,21 @@ class OpayParser(BaseParser):
             f"Date range: {debit_df['trans_date'].min()} to {debit_df['trans_date'].max()}")
         self.logger.info(f"Categories: {debit_df['description'].nunique()}")
 
-        self._save_data(debit_df, save_path, self.logger, self.handler)
+        # self._save_data(debit_df, save_path, self.logger, self.handler)
 
         # self.analyzer.inspect_dataframe(debit_df)
         # print(debit_df["description"].unique())
+
+        return debit_df
 
     def _get_credit_transactions(
         self,
         df: DataFrame,
         save_path: str = "data/cleaned_data/credit_transactions.parquet"
-    ) -> None:
+    ) -> DataFrame:
         # Filter to debit transactions only
-        self.logger.debug("Filtering to credit transactions only")
+        su.space()
+        self.logger.info("Filtering to credit transactions only")
         initial_count = len(df)
 
         credit_df = cast(
@@ -196,7 +200,7 @@ class OpayParser(BaseParser):
             cast(Series, credit_df["trans_date"]))
         credit_df["description"] = credit_df["description"].astype(
             "category")
-        credit_df["debit(₦)"] = self.analyzer.convert_numeric(
+        credit_df["credit(₦)"] = self.analyzer.convert_numeric(
             cast(Series, credit_df["credit(₦)"]))
 
         # Add derived column: transaction month
@@ -216,16 +220,18 @@ class OpayParser(BaseParser):
             f"Date range: {credit_df['trans_date'].min()} to {credit_df['trans_date'].max()}")
         self.logger.info(f"Categories: {credit_df['description'].nunique()}")
 
-        self._save_data(credit_df, save_path, self.logger, self.handler)
+        # self._save_data(credit_df, save_path, self.logger, self.handler)
 
         # self.analyzer.inspect_dataframe(credit_df)
         # print(credit_df["description"].unique())
+
+        return credit_df
 
     def parse_data(
         self,
         file_path: str,
         rows_to_skip: int = 6
-    ) -> None:
+    ) -> Tuple[DataFrame, ...]:
 
         self.logger.info(f"Loading data from {file_path}")
         self.logger.debug(f"Skipping {rows_to_skip} header rows")
@@ -244,6 +250,8 @@ class OpayParser(BaseParser):
         bank_st_df = self.analyzer.normalize_column_names(bank_st_df)
         bank_st_df.columns = bank_st_df.columns.str.replace(" ", "_")
 
-        self._get_debit_transactions(bank_st_df)
+        debit_df = self._get_debit_transactions(bank_st_df)
 
-        self._get_credit_transactions(bank_st_df)
+        credit_df = self._get_credit_transactions(bank_st_df)
+
+        return debit_df, credit_df
