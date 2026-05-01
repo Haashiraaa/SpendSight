@@ -23,15 +23,15 @@ class FinanceDashboard:
         self.fa = fa
 
         self.cat_colors = [
-            "#4A90D9",  # blue - Food & Dining
-            "#2ECC71",  # green - Transport
-            "#F39C12",  # orange - Utilities
-            "#E91E8C",  # pink/red - Shopping
-            "#8E44AD",  # purple - Entertainment
-            "#1ABC9C",  # teal - Other
+            "#4A90D9",  # blue
+            "#2ECC71",  # green
+            "#F39C12",  # orange
+            "#E91E8C",  # pink/red
+            "#8E44AD",  # purple
+            "#1ABC9C",  # teal
         ]
 
-    def visualize_data(
+    def create_dashboard(
         self,
         save_path: str = "data/dashboard/bank_dashboard_powercanvas.png"
     ) -> None:
@@ -41,6 +41,7 @@ class FinanceDashboard:
         savings = self.fa.get_net_savings()
         months = self.fa.get_all_months()
         top_cat, top_cat_spend = self.fa.get_top_spend_category()
+        top_cat_spend = round(top_cat_spend)
         categories, cat_spend = self.fa.get_category_spendings()
 
         top_data = sorted(zip(categories, cat_spend, self.cat_colors),
@@ -60,8 +61,8 @@ class FinanceDashboard:
             rows=3,
             cols=6,
             height_ratios=[0.18, 0.44, 0.38],
-            hspace=0.52,
-            wspace=0.38,
+            hspace=0.6,
+            wspace=0.4,
         )
 
         pc.add_kpi_card(
@@ -104,8 +105,7 @@ class FinanceDashboard:
             (0, 5),
             label="Top Spend Category",
             value=top_cat,
-            delta=f"₦{top_cat_spend:,} total",
-            delta_up=False,
+            delta=f"₦{top_cat_spend:,} spent",
         )
 
         # ─────────────────────────────────────────────────────────────
@@ -244,15 +244,35 @@ class FinanceDashboard:
             plt.FuncFormatter(lambda x, _: f"₦{x:,.0f}"))
         pc._style_chart_ax(_hax, title="Top Spending Categories")
 
+        # stats dictionary
+        savings_stats = dict(zip(months, savings))
+        income_stats = dict(zip(months, income))
+        expenses_stats = dict(zip(months, expenses))
+
+        # Best month
+        smax_month = max(savings_stats, key=savings_stats.get)
+        max_savings = round(savings_stats[smax_month])
+
+        # Worst month
+        smin_month = min(savings_stats, key=savings_stats.get)
+        min_savings = round(savings_stats[smin_month])
+
+        # Highest income
+        imax_month = max(income_stats, key=income_stats.get)
+        max_income = income_stats[imax_month]
+
+        emax_month = max(expenses_stats, key=expenses_stats.get)
+        max_expenses = expenses_stats[emax_month]
+
         # Stats summary panel
         pc.add_stats_panel(
             (2, 4),
             stats={
-                "Best Month":       f"Mar '26  (+₦{max(savings):,})",
-                "Worst Month":      f"Dec '25  (+₦{min(savings):,})",
-                "Highest Income":   f"Mar '26  (₦{max(income):,})",
-                "Highest Spend":    f"Dec '25  (₦{max(expenses):,})",
-                "Top Category":     "Transfers  (₦1,200)",
+                "Best Month":       f"{smax_month}  (+₦{max_savings:,})",
+                "Worst Month":      f"{smin_month}  (₦{min_savings:,})",
+                "Highest Income":   f"{imax_month}  (₦{max_income:,})",
+                "Highest Spend":    f"{emax_month}  (₦{max_expenses:,})",
+                "Top Category":     f"{top_cat}  (₦{top_cat_spend:,})",
                 "Avg Daily Spend":  f"₦{sum(expenses)/(6*30):.0f} / day",
             },
             title="Statement Summary",

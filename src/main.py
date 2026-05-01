@@ -23,7 +23,7 @@ def main(logger: Logger = Logger(logging.INFO)) -> None:
     fa = FinanceAnalysis(debit_df, credit_df, logger)
 
     dash_fi = FinanceDashboard(fa, logger=logger)
-    dash_fi.visualize_data()
+    dash_fi.create_dashboard()
 
 
 if __name__ == "__main__":
